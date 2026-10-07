@@ -1,0 +1,11 @@
+name = "flightwatch-opensky-proxy"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+# Set these with `wrangler secret put OPENSKY_CLIENT_SECRET` (and the same
+# for OPENSKY_CLIENT_ID if you don't want it in plain text), or leave them
+# unset to use OpenSky's anonymous access.
+#
+# [vars]
+# OPENSKY_CLIENT_ID = "your-client-id"
+# ALLOWED_ORIGIN = "https://yourusername.github.io"

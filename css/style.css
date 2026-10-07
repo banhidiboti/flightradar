@@ -1,0 +1,291 @@
+:root {
+  --bg: #0f172a;
+  --panel-bg: rgba(15, 23, 42, 0.92);
+  --panel-border: #2a3650;
+  --text: #e2e8f0;
+  --text-muted: #94a3b8;
+  --accent: #38bdf8;
+  --accent-strong: #0ea5e9;
+  --danger: #f87171;
+  --success: #4ade80;
+  --plane: #f59e0b;
+  --radius: 10px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+#map {
+  position: fixed;
+  inset: 0;
+  background: #0b1220;
+}
+
+/* Dark-mode trick: invert standard OpenStreetMap tiles instead of relying
+   on a key-gated dark tile provider. Only the tile pane is filtered, so
+   markers/overlays (separate Leaflet panes) keep their normal colors. */
+.leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.9) saturate(0.6);
+}
+
+.overlay {
+  position: fixed;
+  z-index: 1000;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* Status bar */
+#status-bar {
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 1.25rem;
+  padding: 0.5rem 1.1rem;
+  font-size: 0.85rem;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.status-error {
+  color: var(--danger);
+}
+
+/* Control panel */
+#control-panel {
+  top: 12px;
+  right: 12px;
+  width: 300px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  padding: 0.75rem;
+}
+
+#control-panel.collapsed #control-body {
+  display: none;
+}
+
+#control-toggle {
+  float: right;
+}
+
+#control-body h2 {
+  margin: 0 0 0.25rem;
+  color: var(--accent);
+  font-size: 1.1rem;
+  clear: both;
+}
+
+.hint {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  margin: 0.25rem 0 0.75rem;
+}
+
+#config-form label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 0.6rem;
+}
+
+#config-form input[type="number"],
+#config-form input[type="url"] {
+  display: block;
+  width: 100%;
+  margin-top: 0.25rem;
+  padding: 0.45rem;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border);
+  background: #0f1724;
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
+details {
+  margin-bottom: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+details summary {
+  cursor: pointer;
+  margin-bottom: 0.3rem;
+}
+
+.switch-row {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.switch-row input[type="checkbox"] {
+  width: 36px;
+  height: 20px;
+  accent-color: var(--accent-strong);
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  border-radius: 6px;
+  padding: 0.5rem 0.9rem;
+  background: var(--accent-strong);
+  color: #04141f;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button#toggle-monitoring.running {
+  background: var(--danger);
+  color: #1a0505;
+}
+
+.icon-button {
+  background: transparent;
+  color: var(--accent);
+  font-size: 1.1rem;
+  padding: 0.2rem 0.5rem;
+  line-height: 1;
+}
+
+.errors {
+  color: var(--danger);
+  font-size: 0.78rem;
+  padding-left: 1rem;
+  margin: 0.4rem 0;
+}
+
+/* Side panel */
+#side-panel {
+  top: 12px;
+  left: 12px;
+  width: 280px;
+  padding: 1rem;
+}
+
+#side-panel h2 {
+  margin: 0 0 0.5rem;
+  color: var(--accent);
+  font-size: 1.1rem;
+  padding-right: 1.5rem;
+}
+
+.sp-airline {
+  margin: -0.35rem 0 0.75rem !important;
+}
+
+#side-panel .icon-button {
+  float: right;
+}
+
+#side-panel dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.3rem 0.75rem;
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+}
+
+#side-panel dt {
+  color: var(--text-muted);
+}
+
+#side-panel dd {
+  margin: 0;
+  text-align: right;
+}
+
+.fr24-button {
+  display: block;
+  text-align: center;
+  background: var(--accent-strong);
+  color: #04141f;
+  font-weight: 600;
+  padding: 0.5rem;
+  border-radius: 6px;
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+
+/* Plane markers */
+.plane-marker {
+  background: transparent;
+  border: none;
+}
+
+.plane-marker-rotate {
+  color: var(--plane);
+  transition: color 0.2s ease;
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.7));
+}
+
+.plane-marker-rotate.alert {
+  color: var(--danger);
+  animation: plane-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes plane-pulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.7)) drop-shadow(0 0 4px var(--danger));
+  }
+  50% {
+    filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.7)) drop-shadow(0 0 10px var(--danger));
+  }
+}
+
+.leaflet-tooltip.leaflet-tooltip-top {
+  background: rgba(15, 23, 42, 0.9);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  font-size: 0.75rem;
+  padding: 2px 6px;
+}
+
+@media (max-width: 640px) {
+  #control-panel {
+    width: calc(100vw - 24px);
+  }
+  #side-panel {
+    width: calc(100vw - 24px);
+  }
+  #status-bar {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    text-align: center;
+  }
+}
