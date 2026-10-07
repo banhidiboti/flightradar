@@ -9,6 +9,7 @@
   --danger: #f87171;
   --success: #4ade80;
   --plane: #ffea00;
+  --plane-domestic: #fb923c;
   --radius: 10px;
 }
 
@@ -244,6 +245,44 @@ button#toggle-monitoring.running {
   font-size: 0.85rem;
 }
 
+/* Airport flight list */
+.flight-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.flight-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.4rem;
+  border-bottom: 1px solid var(--panel-border);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.flight-list li:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.flight-list .fl-callsign {
+  font-weight: 600;
+}
+
+.flight-list .fl-meta {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  text-align: right;
+}
+
+.flight-list .fl-direction {
+  font-size: 1rem;
+}
+
 /* Plane markers */
 .plane-marker {
   background: transparent;
@@ -254,6 +293,10 @@ button#toggle-monitoring.running {
   color: var(--plane);
   transition: color 0.2s ease;
   filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.7));
+}
+
+.plane-marker-rotate.domestic {
+  color: var(--plane-domestic);
 }
 
 .plane-marker-rotate.alert {
@@ -268,6 +311,17 @@ button#toggle-monitoring.running {
   50% {
     filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.7)) drop-shadow(0 0 10px var(--danger));
   }
+}
+
+/* Airport marker */
+.airport-marker {
+  background: transparent;
+  border: none;
+}
+
+.airport-marker-icon {
+  color: var(--accent);
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.8));
 }
 
 .leaflet-tooltip.leaflet-tooltip-top {

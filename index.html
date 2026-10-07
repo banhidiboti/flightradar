@@ -70,20 +70,30 @@
 
   <aside id="side-panel" class="overlay" hidden>
     <button type="button" id="side-panel-close" class="icon-button" aria-label="Bezárás">×</button>
-    <h2 id="sp-callsign">—</h2>
-    <p id="sp-airline" class="hint sp-airline" hidden></p>
-    <dl>
-      <dt>Típus</dt><dd id="sp-type">—</dd>
-      <dt>ICAO24</dt><dd id="sp-icao24">—</dd>
-      <dt>Magasság</dt><dd id="sp-altitude">—</dd>
-      <dt>Sebesség</dt><dd id="sp-speed">—</dd>
-      <dt>Emelkedés/süllyedés</dt><dd id="sp-vrate">—</dd>
-      <dt>Irány</dt><dd id="sp-heading">—</dd>
-      <dt>Táv. a zónától</dt><dd id="sp-distance">—</dd>
-      <dt>Honnan</dt><dd id="sp-origin">—</dd>
-      <dt>Hová</dt><dd id="sp-destination">—</dd>
-    </dl>
-    <a id="sp-fr24-link" href="#" target="_blank" rel="noopener" class="fr24-button">Ugrás a géphez a Flightradar24-en</a>
+
+    <div id="sp-plane-view">
+      <h2 id="sp-callsign">—</h2>
+      <p id="sp-airline" class="hint sp-airline" hidden></p>
+      <dl>
+        <dt>Típus</dt><dd id="sp-type">—</dd>
+        <dt>ICAO24</dt><dd id="sp-icao24">—</dd>
+        <dt>Magasság</dt><dd id="sp-altitude">—</dd>
+        <dt>Sebesség</dt><dd id="sp-speed">—</dd>
+        <dt>Emelkedés/süllyedés</dt><dd id="sp-vrate">—</dd>
+        <dt>Irány</dt><dd id="sp-heading">—</dd>
+        <dt>Táv. a zónától</dt><dd id="sp-distance">—</dd>
+        <dt>Honnan</dt><dd id="sp-origin">—</dd>
+        <dt>Hová</dt><dd id="sp-destination">—</dd>
+      </dl>
+      <a id="sp-fr24-link" href="#" target="_blank" rel="noopener" class="fr24-button">Ugrás a géphez a Flightradar24-en</a>
+    </div>
+
+    <div id="sp-airport-view" hidden>
+      <h2 id="airport-name">—</h2>
+      <p class="hint">Jelenleg követett, leszálló/felszálló gépek a repülőtér közelében (alacsony magasság alapján becsülve).</p>
+      <ul id="airport-flight-list" class="flight-list"></ul>
+      <p id="airport-flight-empty" class="muted" hidden>Jelenleg nincs ilyen gép a láthatáron.</p>
+    </div>
   </aside>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>

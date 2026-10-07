@@ -15,16 +15,26 @@ const ANIMATION_DURATION_MS = 1000;
 
 // Simple top-down plane silhouette, nose pointing north (0deg / up) in a
 // 24x24 viewBox, so a CSS rotate(headingDeg) aligns it with true_track.
+// fill="currentColor" is required - without it SVG defaults to solid
+// black, ignoring the CSS `color` set on the wrapping div entirely.
 const PLANE_SVG = `
 <svg viewBox="0 0 24 24" width="22" height="22" xmlns="http://www.w3.org/2000/svg">
-  <path d="M12 1 L23 14 L13.5 11 L13 21 L17 23 L12 20 L7 23 L11 21 L10.5 11 L1 14 Z" />
+  <path fill="currentColor" d="M12 1 L23 14 L13.5 11 L13 21 L17 23 L12 20 L7 23 L11 21 L10.5 11 L1 14 Z" />
 </svg>`;
 
-function buildPlaneIcon(headingDeg, isAlert) {
+const AIRPORT_SVG = `
+<svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="12" cy="12" r="9" fill="currentColor" fill-opacity="0.18" stroke="currentColor" stroke-width="2" />
+  <path fill="currentColor" d="M12 6 L13 11 L18 13 L18 14.2 L13 13 L13 17 L15 18.3 L15 19.3 L12 18.6 L9 19.3 L9 18.3 L11 17 L11 13 L6 14.2 L6 13 L11 11 Z" />
+</svg>`;
+
+/** `category`: "alert" (red, pulsing) | "domestic" (orange) | undefined/"transit" (yellow). */
+function buildPlaneIcon(headingDeg, category) {
+  const extraClass = category === "alert" ? " alert" : category === "domestic" ? " domestic" : "";
   return L.divIcon({
     className: "plane-marker",
     html: `
-      <div class="plane-marker-rotate${isAlert ? " alert" : ""}" style="transform: rotate(${headingDeg}deg);">
+      <div class="plane-marker-rotate${extraClass}" style="transform: rotate(${headingDeg}deg);">
         ${PLANE_SVG}
       </div>`,
     iconSize: [22, 22],
@@ -32,7 +42,7 @@ function buildPlaneIcon(headingDeg, isAlert) {
   });
 }
 
-export function createMapView({ onPlaneClick, onZoneRelocate }) {
+export function createMapView({ onPlaneClick, onZoneRelocate, onAirportClick }) {
   let map = null;
   let zoneCircle = null;
   let routeLayerGroup = null;
@@ -58,6 +68,22 @@ export function createMapView({ onPlaneClick, onZoneRelocate }) {
     return map;
   }
 
+  function addAirportMarker(airport) {
+    const icon = L.divIcon({
+      className: "airport-marker",
+      html: `<div class="airport-marker-icon">${AIRPORT_SVG}</div>`,
+      iconSize: [20, 20],
+      iconAnchor: [10, 10],
+    });
+    const marker = L.marker([airport.lat, airport.lon], { icon, riseOnHover: true }).addTo(map);
+    marker.bindTooltip(`${airport.name} (${airport.iata})`, { direction: "top", offset: [0, -8] });
+    marker.on("click", (e) => {
+      L.DomEvent.stopPropagation(e);
+      if (onAirportClick) onAirportClick(airport);
+    });
+    return marker;
+  }
+
   function setZoneCircle(lat, lon, radiusKm) {
     const radiusM = radiusKm * 1000;
     if (!zoneCircle) {
@@ -76,13 +102,14 @@ export function createMapView({ onPlaneClick, onZoneRelocate }) {
     }
   }
 
-  function upsertPlane(plane, isAlert) {
+  /** @param {"alert"|"domestic"|"transit"} category */
+  function upsertPlane(plane, category) {
     const latlng = L.latLng(plane.latitude, plane.longitude);
     const existing = planeMarkers.get(plane.icao24);
 
     if (!existing) {
       const marker = L.marker(latlng, {
-        icon: buildPlaneIcon(plane.headingDeg, isAlert),
+        icon: buildPlaneIcon(plane.headingDeg, category),
         riseOnHover: true,
       }).addTo(map);
 
@@ -92,17 +119,17 @@ export function createMapView({ onPlaneClick, onZoneRelocate }) {
         if (onPlaneClick) onPlaneClick(plane);
       });
 
-      planeMarkers.set(plane.icao24, { marker, latlng, animFrom: null, animStart: 0, plane, isAlert });
+      planeMarkers.set(plane.icao24, { marker, latlng, animFrom: null, animStart: 0, plane, category });
       return;
     }
 
-    existing.marker.setIcon(buildPlaneIcon(plane.headingDeg, isAlert));
+    existing.marker.setIcon(buildPlaneIcon(plane.headingDeg, category));
     existing.marker.setTooltipContent(plane.callsign);
     existing.animFrom = existing.latlng;
     existing.latlng = latlng;
     existing.animStart = performance.now();
     existing.plane = plane;
-    existing.isAlert = isAlert;
+    existing.category = category;
     ensureAnimationLoop();
   }
 
@@ -207,5 +234,15 @@ export function createMapView({ onPlaneClick, onZoneRelocate }) {
     }
   }
 
-  return { init, setZoneCircle, upsertPlane, removeStalePlanes, planeCount, panTo, showRoute, clearRoute };
+  return {
+    init,
+    setZoneCircle,
+    upsertPlane,
+    removeStalePlanes,
+    planeCount,
+    panTo,
+    showRoute,
+    clearRoute,
+    addAirportMarker,
+  };
 }

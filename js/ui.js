@@ -72,6 +72,9 @@ export function setStatusError(message) {
 }
 
 export function openSidePanel(plane, distanceKm) {
+  el("sp-plane-view").hidden = false;
+  el("sp-airport-view").hidden = true;
+
   el("sp-callsign").textContent = plane.callsign;
   el("sp-type").textContent = plane.aircraftType
     ? `${plane.aircraftType}${plane.registration ? ` (${plane.registration})` : ""}`
@@ -131,6 +134,45 @@ export function setSidePanelRoute(route) {
   }
 }
 
+export function showAirportPanel(airport, planes, onSelect) {
+  el("sp-plane-view").hidden = true;
+  el("sp-airport-view").hidden = false;
+  el("airport-name").textContent = airport.name;
+
+  const list = el("airport-flight-list");
+  const empty = el("airport-flight-empty");
+  list.innerHTML = "";
+
+  if (!planes || planes.length === 0) {
+    empty.hidden = false;
+  } else {
+    empty.hidden = true;
+    for (const plane of planes) {
+      const climbing = plane.verticalRateMs != null && plane.verticalRateMs > 1;
+      const descending = plane.verticalRateMs != null && plane.verticalRateMs < -1;
+      const arrow = climbing ? "▲" : descending ? "▼" : "―";
+      const label = climbing ? "felszáll" : descending ? "leszáll" : "szinten";
+
+      const li = document.createElement("li");
+      li.innerHTML = `
+        <span class="fl-callsign"><span class="fl-direction">${arrow}</span> ${escapeHtml(plane.callsign)}</span>
+        <span class="fl-meta">${label} · ${Math.round(plane.altitudeM)} m</span>
+      `;
+      li.addEventListener("click", () => onSelect(plane.icao24));
+      list.appendChild(li);
+    }
+  }
+
+  el("side-panel").hidden = false;
+}
+
 export function toggleControlPanel() {
   el("control-panel").classList.toggle("collapsed");
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }

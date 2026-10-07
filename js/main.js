@@ -5,6 +5,7 @@ import { ZoneTracker } from "./zoneTracker.js";
 import { getCurrentPermission, requestNotificationPermission, notifyPlaneEntered, isNotificationSupported } from "./notifications.js";
 import { createMapView } from "./mapView.js";
 import { fetchFlightRoute } from "./flightLookup.js";
+import { BUDAPEST_AIRPORT, DOMESTIC_RADIUS_KM, DOMESTIC_ALTITUDE_M } from "./airports.js";
 import {
   fillConfigForm,
   readConfigForm,
@@ -20,6 +21,7 @@ import {
   toggleControlPanel,
   setSidePanelLoadingRoute,
   setSidePanelRoute,
+  showAirportPanel,
 } from "./ui.js";
 
 const zoneTracker = new ZoneTracker();
@@ -30,15 +32,20 @@ let secondsUntilNextPoll = 0;
 let isPolling = false;
 let lastSelectedIcao24 = null;
 let lastSelectedRoute = null;
+let isAirportViewActive = false;
+/** Full plane list from the most recent poll cycle, with distances attached - reused by the airport flight list. */
+let lastWithDistance = [];
 
 const mapView = createMapView({
   onPlaneClick: handlePlaneClick,
   onZoneRelocate: handleZoneRelocate,
+  onAirportClick: handleAirportClick,
 });
 
 function init() {
   mapView.init("map", MAP_INITIAL_VIEW);
   mapView.setZoneCircle(currentConfig.zoneLat, currentConfig.zoneLon, currentConfig.radiusKm);
+  mapView.addAirportMarker(BUDAPEST_AIRPORT);
 
   fillConfigForm(currentConfig);
   setMonitoringButtonState(false, Boolean(currentConfig.proxyUrl));
@@ -49,7 +56,7 @@ function init() {
   document.getElementById("notif-toggle").addEventListener("change", onNotifToggle);
   document.getElementById("control-toggle").addEventListener("click", toggleControlPanel);
   document.getElementById("side-panel-close").addEventListener("click", () => {
-    deselectPlane();
+    closeSidePanelView();
   });
 
   if (validateConfig(currentConfig).length === 0) {
@@ -64,9 +71,10 @@ function init() {
   }
 }
 
-function deselectPlane() {
+function closeSidePanelView() {
   lastSelectedIcao24 = null;
   lastSelectedRoute = null;
+  isAirportViewActive = false;
   closeSidePanel();
   mapView.clearRoute();
 }
@@ -92,7 +100,28 @@ function handleZoneRelocate(lat, lon) {
   document.getElementById("zoneLon").value = lon.toFixed(4);
 }
 
+function handleAirportClick(airport) {
+  lastSelectedIcao24 = null;
+  lastSelectedRoute = null;
+  mapView.clearRoute();
+  isAirportViewActive = true;
+  renderAirportPanel(airport);
+}
+
+function renderAirportPanel(airport) {
+  const domesticPlanes = lastWithDistance
+    .filter((plane) => plane.distanceToBudKm <= DOMESTIC_RADIUS_KM && plane.altitudeM <= DOMESTIC_ALTITUDE_M)
+    .sort((a, b) => a.distanceToBudKm - b.distanceToBudKm);
+  showAirportPanel(airport, domesticPlanes, handleAirportFlightSelect);
+}
+
+function handleAirportFlightSelect(icao24) {
+  const plane = lastWithDistance.find((p) => p.icao24 === icao24);
+  if (plane) handlePlaneClick(plane);
+}
+
 function handlePlaneClick(plane) {
+  isAirportViewActive = false;
   lastSelectedIcao24 = plane.icao24;
   lastSelectedRoute = null;
   const distanceKm = haversineDistanceKm(currentConfig.zoneLat, currentConfig.zoneLon, plane.latitude, plane.longitude);
@@ -158,7 +187,9 @@ async function runPollCycle() {
     const withDistance = airborne.map((plane) => ({
       ...plane,
       distanceKm: haversineDistanceKm(currentConfig.zoneLat, currentConfig.zoneLon, plane.latitude, plane.longitude),
+      distanceToBudKm: haversineDistanceKm(BUDAPEST_AIRPORT.lat, BUDAPEST_AIRPORT.lon, plane.latitude, plane.longitude),
     }));
+    lastWithDistance = withDistance;
 
     const planesInZone = withDistance.filter(
       (plane) => plane.distanceKm <= currentConfig.radiusKm && plane.altitudeM <= currentConfig.altitudeLimitM,
@@ -173,9 +204,18 @@ async function runPollCycle() {
     const currentIds = new Set();
     for (const plane of withDistance) {
       currentIds.add(plane.icao24);
-      mapView.upsertPlane(plane, inZoneIds.has(plane.icao24));
+      const category = inZoneIds.has(plane.icao24)
+        ? "alert"
+        : plane.distanceToBudKm <= DOMESTIC_RADIUS_KM && plane.altitudeM <= DOMESTIC_ALTITUDE_M
+          ? "domestic"
+          : "transit";
+      mapView.upsertPlane(plane, category);
     }
     mapView.removeStalePlanes(currentIds);
+
+    if (isAirportViewActive) {
+      renderAirportPanel(BUDAPEST_AIRPORT);
+    }
 
     if (lastSelectedIcao24 && currentIds.has(lastSelectedIcao24)) {
       const selected = withDistance.find((p) => p.icao24 === lastSelectedIcao24);
@@ -189,7 +229,7 @@ async function runPollCycle() {
         }
       }
     } else if (lastSelectedIcao24) {
-      deselectPlane();
+      closeSidePanelView();
     }
 
     setStatusCount(mapView.planeCount());
