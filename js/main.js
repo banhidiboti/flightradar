@@ -1,10 +1,10 @@
 import { loadConfig, saveConfig, validateConfig, HUNGARY_BBOX, MAP_INITIAL_VIEW } from "./config.js";
 import { haversineDistanceKm } from "./geo.js";
-import { fetchStatesInBox, OpenSkyError } from "./openskyClient.js";
+import { fetchStatesInBox, AdsbError } from "./adsbClient.js";
 import { ZoneTracker } from "./zoneTracker.js";
 import { getCurrentPermission, requestNotificationPermission, notifyPlaneEntered, isNotificationSupported } from "./notifications.js";
 import { createMapView } from "./mapView.js";
-import { fetchAircraftType, fetchFlightRoute } from "./flightLookup.js";
+import { fetchFlightRoute } from "./flightLookup.js";
 import {
   fillConfigForm,
   readConfigForm,
@@ -18,8 +18,7 @@ import {
   openSidePanel,
   closeSidePanel,
   toggleControlPanel,
-  setSidePanelLoadingStaticInfo,
-  setSidePanelAircraftType,
+  setSidePanelLoadingRoute,
   setSidePanelRoute,
 } from "./ui.js";
 
@@ -87,12 +86,8 @@ function handlePlaneClick(plane) {
   lastSelectedRoute = null;
   const distanceKm = haversineDistanceKm(currentConfig.zoneLat, currentConfig.zoneLon, plane.latitude, plane.longitude);
   openSidePanel(plane, distanceKm);
-  setSidePanelLoadingStaticInfo();
+  setSidePanelLoadingRoute();
   mapView.clearRoute();
-
-  fetchAircraftType(plane.icao24).then((info) => {
-    if (lastSelectedIcao24 === plane.icao24) setSidePanelAircraftType(info);
-  });
 
   fetchFlightRoute(plane.callsign).then((route) => {
     if (lastSelectedIcao24 !== plane.icao24) return;
@@ -190,7 +185,7 @@ async function runPollCycle() {
     setStatusUpdated(new Date());
     setStatusError(null);
   } catch (err) {
-    const message = err instanceof OpenSkyError ? err.message : `Váratlan hiba: ${err.message || err}`;
+    const message = err instanceof AdsbError ? err.message : `Váratlan hiba: ${err.message || err}`;
     setStatusError(message);
   }
 

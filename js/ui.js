@@ -73,6 +73,9 @@ export function setStatusError(message) {
 
 export function openSidePanel(plane, distanceKm) {
   el("sp-callsign").textContent = plane.callsign;
+  el("sp-type").textContent = plane.aircraftType
+    ? `${plane.aircraftType}${plane.registration ? ` (${plane.registration})` : ""}`
+    : "ismeretlen";
   el("sp-icao24").textContent = plane.icao24;
   el("sp-altitude").textContent =
     plane.altitudeM != null ? `${Math.round(plane.altitudeM)} m / ${Math.round(plane.altitudeM * 3.28084)} ft` : "n/a";
@@ -96,15 +99,10 @@ export function closeSidePanel() {
   el("side-panel").hidden = true;
 }
 
-export function setSidePanelLoadingStaticInfo() {
-  el("sp-type").textContent = "…";
+export function setSidePanelLoadingRoute() {
   el("sp-origin").textContent = "…";
   el("sp-destination").textContent = "…";
   el("sp-airline").hidden = true;
-}
-
-export function setSidePanelAircraftType(info) {
-  el("sp-type").textContent = info?.type ? `${info.type}${info.icaoType ? ` (${info.icaoType})` : ""}` : "ismeretlen";
 }
 
 export function setSidePanelRoute(route) {

@@ -1,70 +1,68 @@
 /**
- * Cloudflare Worker CORS proxy for the OpenSky Network REST API.
+ * Cloudflare Worker CORS proxy for free, keyless community ADS-B APIs.
  *
- * Why this exists: opensky-network.org only sends an
- * Access-Control-Allow-Origin header for its own domain, so a static
- * GitHub Pages frontend cannot call /api/states/all directly from the
- * browser. This worker sits in between, forwards the bbox query to
- * OpenSky, optionally attaches an OAuth2 bearer token for a higher rate
- * limit, and adds the CORS headers the frontend needs.
+ * Why this exists: a static GitHub Pages frontend can't call these APIs
+ * directly - none of them send CORS headers, so the browser would block
+ * a direct fetch() regardless of how the frontend code is written. This
+ * worker sits in between, forwards the query, and adds the CORS header
+ * the frontend needs.
+ *
+ * This used to proxy OpenSky Network instead. Switched away from it
+ * because OpenSky silently stalls (~20s, then nothing) any real data
+ * request that originates from Cloudflare's network specifically - it
+ * answers the same query instantly from an ordinary residential/dev IP,
+ * so it's very likely filtering well-known cloud/CDN egress ranges.
+ *
+ * It then briefly used only adsb.lol, until that *also* turned out to
+ * rate-limit Cloudflare's shared egress IPs for an extended period (not
+ * just a quick rolling window) during testing - again fine from a normal
+ * IP, blocked from Cloudflare's network. So this now tries a short list
+ * of providers in order and uses whichever answers first; if one has a
+ * bad day, the app keeps working through another.
  *
  * Deploy: paste this file into a new Worker in the Cloudflare dashboard
- * (Workers & Pages -> Create -> "Hello World" template -> replace code),
- * or deploy with Wrangler using the wrangler.toml next to this file.
+ * (Workers & Pages -> Create -> "Start with Hello World!" -> replace the
+ * code), or deploy with Wrangler using the wrangler.toml next to this
+ * file.
  *
- * Optional environment variables (Settings -> Variables and Secrets):
- *   OPENSKY_CLIENT_ID     - OAuth2 client id from an OpenSky API client
- *   OPENSKY_CLIENT_SECRET - OAuth2 client secret (mark as "Secret")
- *   ALLOWED_ORIGIN        - restrict CORS to your GitHub Pages origin,
- *                           e.g. https://yourusername.github.io
- *                           (defaults to "*" if not set)
- *
- * Without the client id/secret the worker still works using OpenSky's
- * anonymous access, just with a much smaller daily credit quota.
+ * Optional environment variable (Settings -> Variables and Secrets):
+ *   ALLOWED_ORIGIN - restrict CORS to your GitHub Pages origin, e.g.
+ *                    https://yourusername.github.io (defaults to "*")
  */
 
-const TOKEN_URL =
-  "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token";
-const STATES_URL = "https://opensky-network.org/api/states/all";
+const MAX_RADIUS_NM = 250; // observed working cap for these point/radius endpoints
 
-// Cached across requests handled by the same Worker isolate. Not guaranteed
-// to persist (isolates can be recycled), but it saves a token request on
-// most calls since tokens are valid for ~30 minutes.
-let cachedToken = null;
+// Tried in order; first one that returns a usable response wins. Each
+// provider's raw response uses a different wrapper key for the aircraft
+// array (adsb.lol: "ac", adsb.fi: "aircraft") even though the per-aircraft
+// fields themselves are the same readsb/tar1090 schema - normalized to
+// `{ ac: [...] }` before it goes back to the frontend either way.
+const PROVIDERS = [
+  {
+    name: "adsb.lol",
+    buildUrl: (lat, lon, radiusNm) => `https://api.adsb.lol/v2/point/${lat}/${lon}/${radiusNm}`,
+    acKey: "ac",
+  },
+  {
+    name: "adsb.fi",
+    buildUrl: (lat, lon, radiusNm) => `https://opendata.adsb.fi/api/v2/lat/${lat}/lon/${lon}/dist/${radiusNm}`,
+    acKey: "aircraft",
+  },
+];
 
-async function getAccessToken(env) {
-  if (!env.OPENSKY_CLIENT_ID || !env.OPENSKY_CLIENT_SECRET) {
-    return null;
-  }
+// Several of these providers reject requests with no/generic User-Agent
+// ("too generic; include valid contact info") - Cloudflare Workers' fetch()
+// sends no User-Agent by default, so this has to be set explicitly. Swap
+// the URL for your own GitHub Pages/repo if you forked this.
+const USER_AGENT = "FlightWatch/1.0 (+https://github.com/banhidiboti/flightradar)";
 
-  const now = Date.now();
-  if (cachedToken && cachedToken.expiresAt > now + 5000) {
-    return cachedToken.value;
-  }
-
-  const body = new URLSearchParams({
-    grant_type: "client_credentials",
-    client_id: env.OPENSKY_CLIENT_ID,
-    client_secret: env.OPENSKY_CLIENT_SECRET,
-  });
-
-  const response = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
-  });
-
-  if (!response.ok) {
-    throw new Error(`OpenSky OAuth token request failed with HTTP ${response.status}`);
-  }
-
-  const data = await response.json();
-  cachedToken = {
-    value: data.access_token,
-    expiresAt: now + (data.expires_in ? data.expires_in * 1000 : 25 * 60 * 1000),
-  };
-  return cachedToken.value;
-}
+// Edge-cached for this long, deduplicating identical queries. This matters
+// a lot if this same Worker URL is shared as the app's default proxy for
+// every visitor (see js/config.js): without it, N simultaneous visitors
+// polling every ~12s means N upstream requests every ~12s; with it, all of
+// them within this window share a single upstream request per Cloudflare
+// edge location.
+const CACHE_SECONDS = 8;
 
 function buildCorsHeaders(env) {
   const origin = env.ALLOWED_ORIGIN || "*";
@@ -76,8 +74,60 @@ function buildCorsHeaders(env) {
   };
 }
 
+function toRad(deg) {
+  return (deg * Math.PI) / 180;
+}
+
+/** Haversine distance in km between two lat/lon points. */
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.sqrt(Math.min(1, a)));
+}
+
+/**
+ * These APIs take a center + radius (nm), not a bounding box, so the
+ * incoming lamin/lomin/lamax/lomax is converted into a covering circle:
+ * the bbox center, with a radius reaching its farthest corner (plus a
+ * small margin), capped at the providers' working limit.
+ */
+function bboxToPointQuery(lamin, lomin, lamax, lomax) {
+  const centerLat = (lamin + lamax) / 2;
+  const centerLon = (lomin + lomax) / 2;
+  const cornerDistanceKm = haversineKm(centerLat, centerLon, lamax, lomax);
+  const radiusNm = Math.min(MAX_RADIUS_NM, Math.ceil((cornerDistanceKm * 1.05) / 1.852));
+  return { centerLat, centerLon, radiusNm };
+}
+
+/** Tries each provider in order, returns the first usable `{ ac: [...] }`. */
+async function fetchFromProviders(centerLat, centerLon, radiusNm) {
+  const lat = centerLat.toFixed(2);
+  const lon = centerLon.toFixed(2);
+  const attempts = [];
+
+  for (const provider of PROVIDERS) {
+    try {
+      const response = await fetch(provider.buildUrl(lat, lon, radiusNm), {
+        headers: { "User-Agent": USER_AGENT },
+      });
+      if (!response.ok) {
+        attempts.push(`${provider.name}: HTTP ${response.status}`);
+        continue;
+      }
+      const data = await response.json();
+      return { ac: data[provider.acKey] || [], provider: provider.name };
+    } catch (err) {
+      attempts.push(`${provider.name}: ${err?.message || err}`);
+    }
+  }
+
+  throw new Error(`All providers failed - ${attempts.join("; ")}`);
+}
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const cors = buildCorsHeaders(env);
 
     if (request.method === "OPTIONS") {
@@ -92,42 +142,51 @@ export default {
     }
 
     const requestUrl = new URL(request.url);
-    const forwardParams = new URLSearchParams();
-    for (const key of ["lamin", "lomin", "lamax", "lomax", "icao24", "time"]) {
-      const value = requestUrl.searchParams.get(key);
-      if (value !== null) forwardParams.set(key, value);
-    }
+    const lamin = Number(requestUrl.searchParams.get("lamin"));
+    const lomin = Number(requestUrl.searchParams.get("lomin"));
+    const lamax = Number(requestUrl.searchParams.get("lamax"));
+    const lomax = Number(requestUrl.searchParams.get("lomax"));
 
-    if (!forwardParams.has("lamin") || !forwardParams.has("lamax")) {
+    if (![lamin, lomin, lamax, lomax].every(Number.isFinite)) {
       return new Response(
-        JSON.stringify({ error: "Missing bounding box query params (lamin/lomin/lamax/lomax)" }),
+        JSON.stringify({ error: "Missing/invalid bounding box query params (lamin/lomin/lamax/lomax)" }),
         { status: 400, headers: { ...cors, "Content-Type": "application/json" } },
       );
     }
 
-    try {
-      const token = await getAccessToken(env);
-      const upstreamHeaders = {};
-      if (token) upstreamHeaders.Authorization = `Bearer ${token}`;
+    const { centerLat, centerLon, radiusNm } = bboxToPointQuery(lamin, lomin, lamax, lomax);
+    const cacheKey = new Request(
+      `https://flightwatch-cache.internal/?lat=${centerLat.toFixed(2)}&lon=${centerLon.toFixed(2)}&r=${radiusNm}`,
+      { method: "GET" },
+    );
 
-      const upstreamResponse = await fetch(`${STATES_URL}?${forwardParams.toString()}`, {
-        headers: upstreamHeaders,
+    const cache = caches.default;
+    const cachedResponse = await cache.match(cacheKey);
+    if (cachedResponse) {
+      const cachedBody = await cachedResponse.text();
+      return new Response(cachedBody, {
+        status: 200,
+        headers: { ...cors, "Content-Type": "application/json", "X-Cache": "HIT" },
       });
+    }
 
-      const bodyText = await upstreamResponse.text();
-      const rateLimitRemaining = upstreamResponse.headers.get("X-Rate-Limit-Remaining");
+    try {
+      const { ac, provider } = await fetchFromProviders(centerLat, centerLon, radiusNm);
+      const bodyText = JSON.stringify({ ac });
+
+      const cacheable = new Response(bodyText, {
+        status: 200,
+        headers: { "Content-Type": "application/json", "Cache-Control": `public, max-age=${CACHE_SECONDS}` },
+      });
+      ctx.waitUntil(cache.put(cacheKey, cacheable));
 
       return new Response(bodyText, {
-        status: upstreamResponse.status,
-        headers: {
-          ...cors,
-          "Content-Type": "application/json",
-          ...(rateLimitRemaining ? { "X-Rate-Limit-Remaining": rateLimitRemaining } : {}),
-        },
+        status: 200,
+        headers: { ...cors, "Content-Type": "application/json", "X-Cache": "MISS", "X-Provider": provider },
       });
     } catch (err) {
       return new Response(
-        JSON.stringify({ error: "Upstream OpenSky request failed", detail: String(err && err.message || err) }),
+        JSON.stringify({ error: "All upstream ADS-B providers failed", detail: String(err?.message || err) }),
         { status: 502, headers: { ...cors, "Content-Type": "application/json" } },
       );
     }
