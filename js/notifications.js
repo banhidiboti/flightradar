@@ -29,7 +29,16 @@ export async function requestNotificationPermission() {
   return result;
 }
 
-export function notifyPlaneEntered(plane, distanceKm) {
+export function registerNotificationServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+  navigator.serviceWorker.register("sw.js").catch(() => {
+    // Notifications just fall back to the direct Notification constructor
+    // below (fine on desktop, silently unavailable on mobile Chrome - no
+    // worse off than before this existed).
+  });
+}
+
+export async function notifyPlaneEntered(plane, distanceKm) {
   if (!isNotificationSupported() || Notification.permission !== "granted") return;
 
   const altitudeFt = plane.altitudeM != null ? Math.round(plane.altitudeM * 3.28084) : null;
@@ -44,11 +53,36 @@ export function notifyPlaneEntered(plane, distanceKm) {
     `Távolság: ${distanceKm.toFixed(1)} km`,
   ];
 
-  const notification = new Notification(`Repülő a zónában: ${plane.callsign}`, {
+  const title = `Repülő a zónában: ${plane.callsign}`;
+  const options = {
     body: bodyLines.join("\n"),
     tag: plane.icao24,
-  });
+    data: { callsign: plane.callsign },
+  };
 
+  // Android Chrome (and most other mobile browsers) refuse `new
+  // Notification(...)` outright - it only works through a service worker
+  // registration there. Desktop supports both; routing through the SW
+  // when available keeps the behavior consistent everywhere, with the
+  // plain constructor as a fallback for browsers with Notification
+  // support but no service worker.
+  if ("serviceWorker" in navigator) {
+    try {
+      // `ready` can hang forever if registration never actually
+      // activates (e.g. sw.js failed to load) - race it against a
+      // timeout so a broken SW can't block notifications entirely.
+      const registration = await Promise.race([
+        navigator.serviceWorker.ready,
+        new Promise((_, reject) => setTimeout(() => reject(new Error("service worker not ready")), 3000)),
+      ]);
+      await registration.showNotification(title, options);
+      return;
+    } catch {
+      // fall through to the direct constructor below
+    }
+  }
+
+  const notification = new Notification(title, options);
   notification.onclick = () => {
     window.open(`https://www.flightradar24.com/${plane.callsign.trim()}`, "_blank");
   };

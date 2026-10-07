@@ -2,7 +2,13 @@ import { loadConfig, saveConfig, validateConfig, HUNGARY_BBOX, MAP_INITIAL_VIEW 
 import { haversineDistanceKm } from "./geo.js";
 import { fetchStatesInBox, AdsbError } from "./adsbClient.js";
 import { ZoneTracker } from "./zoneTracker.js";
-import { getCurrentPermission, requestNotificationPermission, notifyPlaneEntered, isNotificationSupported } from "./notifications.js";
+import {
+  getCurrentPermission,
+  requestNotificationPermission,
+  notifyPlaneEntered,
+  isNotificationSupported,
+  registerNotificationServiceWorker,
+} from "./notifications.js";
 import { createMapView } from "./mapView.js";
 import { fetchFlightRoute } from "./flightLookup.js";
 import { BUDAPEST_AIRPORT, DOMESTIC_RADIUS_KM, DOMESTIC_ALTITUDE_M } from "./airports.js";
@@ -43,6 +49,8 @@ const mapView = createMapView({
 });
 
 function init() {
+  registerNotificationServiceWorker();
+
   mapView.init("map", MAP_INITIAL_VIEW);
   mapView.setZoneCircle(currentConfig.zoneLat, currentConfig.zoneLon, currentConfig.radiusKm);
   mapView.addAirportMarker(BUDAPEST_AIRPORT);
