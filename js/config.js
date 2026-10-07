@@ -8,8 +8,14 @@ export const HUNGARY_BBOX = { lamin: 45.7, lomin: 16.1, lamax: 48.6, lomax: 22.9
 
 export const MAP_INITIAL_VIEW = { lat: 47.16, lon: 19.5, zoom: 7 };
 
+// Pre-filled so the app works the instant someone opens the page, with
+// zero setup - this is the author's own deployed proxy (see
+// vercel-proxy/), shared by every visitor. Still fully overridable in the
+// control panel (e.g. to point at your own proxy instead).
+const DEFAULT_PROXY_URL = "https://flightradar-ln91fu8q5-flightwatch.vercel.app/api/proxy";
+
 export const DEFAULT_CONFIG = {
-  proxyUrl: "",
+  proxyUrl: DEFAULT_PROXY_URL,
   zoneLat: 47.64, // Pomáz
   zoneLon: 19.0333,
   radiusKm: 10,

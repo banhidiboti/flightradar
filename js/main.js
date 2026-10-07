@@ -51,6 +51,17 @@ function init() {
   document.getElementById("side-panel-close").addEventListener("click", () => {
     deselectPlane();
   });
+
+  if (validateConfig(currentConfig).length === 0) {
+    startMonitoring();
+  }
+
+  // Small screens don't have room for a floating settings panel and the
+  // map at once - start collapsed so the map/planes are visible right
+  // away; the gear icon still opens it on demand.
+  if (window.matchMedia("(max-width: 640px)").matches) {
+    toggleControlPanel();
+  }
 }
 
 function deselectPlane() {
