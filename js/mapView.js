@@ -13,13 +13,16 @@ const DARK_TILE_ATTRIBUTION =
 
 const ANIMATION_DURATION_MS = 1000;
 
-// Simple top-down plane silhouette, nose pointing north (0deg / up) in a
-// 24x24 viewBox, so a CSS rotate(headingDeg) aligns it with true_track.
-// fill="currentColor" is required - without it SVG defaults to solid
-// black, ignoring the CSS `color` set on the wrapping div entirely.
+// Classic top-down airplane silhouette (the well-known Material Design
+// "flight" glyph), nose pointing north (0deg / up) in a 24x24 viewBox, so
+// a CSS rotate(headingDeg) aligns it with true_track. Reads cleanly even
+// at the small size this renders at on the map, unlike a more detailed
+// silhouette would. fill="currentColor" is required - without it SVG
+// defaults to solid black, ignoring the CSS `color` set on the wrapping
+// div entirely.
 const PLANE_SVG = `
 <svg viewBox="0 0 24 24" width="22" height="22" xmlns="http://www.w3.org/2000/svg">
-  <path fill="currentColor" d="M12 1 L23 14 L13.5 11 L13 21 L17 23 L12 20 L7 23 L11 21 L10.5 11 L1 14 Z" />
+  <path fill="currentColor" d="M21,16V14L13,9V3.5C13,2.67 12.33,2 11.5,2C10.67,2 10,2.67 10,3.5V9L2,14V16L10,13.5V19L7.5,20.5V22L11.5,21L15.5,22V20.5L13,19V13.5L21,16Z" />
 </svg>`;
 
 const AIRPORT_SVG = `
